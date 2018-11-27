@@ -2,7 +2,7 @@ language: bash
 
 env:
   global:
-  - IMAGE_NAME=${DOCKER_USERNAME}/spark-docker
+  - IMAGE_NAME=${DOCKER_USERNAME}/spark
   - JAVA_VERSION=8
 
 matrix:
