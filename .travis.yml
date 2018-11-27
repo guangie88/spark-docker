@@ -2,7 +2,7 @@ language: bash
 
 env:
   global:
-  - IMAGE_NAME=${DOCKER_USERNAME}/jupyter-pyspark-toree
+  - IMAGE_NAME=${DOCKER_USERNAME}/spark-docker
   - JAVA_VERSION=8
 
 matrix:
