@@ -84,7 +84,7 @@ script:
 
 # Docker verification
 - |-
-  docker run --rm ${REF_IMAGE} \
+  docker run --rm -t ${REF_IMAGE} \
     spark-submit --version | grep "${SPARK_VERSION}" > /dev/null
 
 # Docker re-tagging
