@@ -17,7 +17,7 @@ RUN set -xeuo pipefail; \
     fi; \
     export SPARK_NAME="spark-${SPARK_VERSION}-bin-hadoop${HADOOP_MAJMIN_VERSION}"; \
     export SPARK_DIR="/opt/${SPARK_NAME}"; \
-    export SPARK_DIR_PARENT="$(cd ${SPARK_HOME}/.. && pwd)"; \
+    export SPARK_DIR_PARENT="$(dirname "${SPARK_HOME}")"; \
     mkdir -p ${SPARK_DIR_PARENT}; \
     # Build-time only deps
     apt-get update; \
