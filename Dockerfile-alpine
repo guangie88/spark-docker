@@ -1,0 +1,31 @@
+# Alpine based
+ARG JAVA_MAJOR_VERSION=8
+FROM openjdk:${JAVA_MAJOR_VERSION}-jre-alpine
+
+ARG HADOOP_MAJMIN_VERSION="2.7"
+
+ARG SPARK_VERSION
+ENV SPARK_VERSION "${SPARK_VERSION}"
+
+ENV SPARK_HOME "/opt/spark"
+
+RUN set -xeu; \
+    # Setup and install 
+    if [ -z "${SPARK_VERSION}" ]; then \
+        echo "Please set --build-arg SPARK_VERSION for Docker build!" >&2; \
+        sh -c "exit 1"; \
+    fi; \
+    export SPARK_NAME="spark-${SPARK_VERSION}-bin-hadoop${HADOOP_MAJMIN_VERSION}"; \
+    export SPARK_DIR="/opt/${SPARK_NAME}"; \
+    export SPARK_DIR_PARENT="$(dirname "${SPARK_HOME}")"; \
+    mkdir -p ${SPARK_DIR_PARENT}; \
+    # Spark installation
+    wget https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/${SPARK_NAME}.tgz; \
+    tar zxf ${SPARK_NAME}.tgz -C ${SPARK_DIR_PARENT}; \
+    rm ${SPARK_NAME}.tgz; \
+    ln -s ${SPARK_DIR} ${SPARK_HOME}; \
+    # Install required runtime dependencies
+    apk add --no-cache bash; \
+    :
+
+ENV PATH="${SPARK_HOME}/bin/:${PATH}"
