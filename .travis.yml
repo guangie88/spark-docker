@@ -66,7 +66,7 @@ script:
 
 # Get latest set of Spark versions to build concurrently
 - |-
-  declare -a SPARK_VERSIONS=($(
+  SPARK_VERSIONS=($(
     curl -s https://archive.apache.org/dist/spark/ |
     grep -oE 'spark-[2]\.[[:digit:]]+\.[[:digit:]]/' |
     grep -oE '[2]\.[[:digit:]]+\.[[:digit:]]' |
@@ -76,6 +76,8 @@ script:
 # Iterate across each Spark version
 - |-
   for SPARK_VERSION in "${SPARK_VERSIONS[@]}"; do
+    echo Building Spark version - ${SPARK_VERSION}
+
     ## Spark only tags
     SPARK_TAG="${SPARK_VERSION}"
     SPARK_MAJMIN_TAG="${SPARK_VERSION:0:3}"
