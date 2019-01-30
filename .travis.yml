@@ -1,118 +1,141 @@
 language: bash
 
+# Free Travis gives max 5 concurrent builds
 env:
   global:
   - IMAGE_NAME=${DOCKER_USERNAME}/spark
   - HADOOP_MAJMIN_VERSION=2.7
   - JAVA_MAJOR_VERSION=8
+  - N=5
 
+# Spark version is derived at runtime dynamically
 matrix:
   include:
   # Debian builds
   - services: docker
     env:
-    - SPARK_VERSION=2.4.0
     - DIST=debian
-    - LATEST=true
+    - IDX=1
   - services: docker
     env:
-    - SPARK_VERSION=2.3.2
     - DIST=debian
+    - IDX=2
   - services: docker
     env:
-    - SPARK_VERSION=2.2.3
     - DIST=debian
+    - IDX=3
   - services: docker
     env:
-    - SPARK_VERSION=2.1.3
     - DIST=debian
+    - IDX=4
   - services: docker
     env:
-    - SPARK_VERSION=2.0.2
     - DIST=debian
+    - IDX=0
   # Alpine builds
   - services: docker
     env:
-    - SPARK_VERSION=2.4.0
     - DIST=alpine
+    - IDX=1
   - services: docker
     env:
-    - SPARK_VERSION=2.3.2
     - DIST=alpine
+    - IDX=2
   - services: docker
     env:
-    - SPARK_VERSION=2.2.3
     - DIST=alpine
+    - IDX=3
   - services: docker
     env:
-    - SPARK_VERSION=2.1.3
     - DIST=alpine
+    - IDX=4
   - services: docker
     env:
-    - SPARK_VERSION=2.0.2
     - DIST=alpine
+    - IDX=0
   
 before_script:
 - docker login -u="${DOCKER_USERNAME}" -p="${DOCKER_PASSWORD}"
 
 script:
-# Docker tags to use (some are omitted since the version values are constant)
+# Define static tags for referencing
 - REF_TAG="ref"
 - REF_IMAGE="${IMAGE_NAME}:${REF_TAG}"
-
-## Spark only tags
-- SPARK_TAG="${SPARK_VERSION}"
-- SPARK_MAJMIN_TAG="${SPARK_VERSION:0:3}"
-
-## Spark + Java tags
 - JAVA_MAJOR_TAG="java-${JAVA_MAJOR_VERSION}"
-- SPARK_JAVA_MAJOR_TAG="${SPARK_TAG}_${JAVA_MAJOR_TAG}"
-- SPARK_MAJMIN_JAVA_MAJOR_TAG="${SPARK_MAJMIN_TAG}_${JAVA_MAJOR_TAG}"
-
-## Spark + Java + Dist tags
 - DIST_TAG="${DIST}"
-- SPARK_JAVA_MAJOR_DIST_TAG="${SPARK_TAG}_${JAVA_MAJOR_TAG}_${DIST_TAG}"
-- SPARK_MAJMIN_JAVA_MAJOR_DIST_TAG="${SPARK_MAJMIN_TAG}_${JAVA_MAJOR_TAG}_${DIST_TAG}"
 
-# Docker build
+# Get latest set of Spark versions to build concurrently
 - |-
-  docker build . -f Dockerfile-${DIST} \
-    --build-arg JAVA_MAJOR_VERSION="${JAVA_MAJOR_VERSION}" \
-    --build-arg SPARK_VERSION="${SPARK_VERSION}" \
-    --build-arg HADOOP_MAJMIN_VERSION="${HADOOP_MAJMIN_VERSION}" \
-    -t "${REF_IMAGE}"
+  SPARK_VERSIONS=($(
+    curl -s https://archive.apache.org/dist/spark/ |
+    grep -oE 'spark-[2]\.[[:digit:]]+\.[[:digit:]]/' |
+    grep -oE '[2]\.[[:digit:]]+\.[[:digit:]]' |
+    sort | uniq |
+    awk "NR % ${N} == ${IDX}"))
 
-# Docker verification
+# Iterate across each Spark version
 - |-
-  docker run --rm -t ${REF_IMAGE} \
-    spark-submit --version | grep "${SPARK_VERSION}" > /dev/null
+  for SPARK_VERSION in "${SPARK_VERSIONS[@]}"; do
+    echo Building Spark version - ${SPARK_VERSION}
 
-# Docker re-tagging
-# Spark version is always unique across Nomad version, so all builds can tag and push independently
-- |-
-  if [ "${DIST} = debian" ]; then
-    # Non-dist tag is given to Debian
-    docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_TAG}"
-    docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_TAG}"
-    docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_JAVA_MAJOR_TAG}"
-    docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_JAVA_MAJOR_TAG}"
-  fi
-- docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_JAVA_MAJOR_DIST_TAG}"
-- docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_JAVA_MAJOR_DIST_TAG}"
+    ## Spark only tags
+    SPARK_TAG="${SPARK_VERSION}"
+    SPARK_MAJMIN_TAG="${SPARK_VERSION:0:3}"
 
-# Docker push to registry
-- |-
-  if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then
+    ## Spark + Java tags
+    SPARK_JAVA_MAJOR_TAG="${SPARK_TAG}_${JAVA_MAJOR_TAG}"
+    SPARK_MAJMIN_JAVA_MAJOR_TAG="${SPARK_MAJMIN_TAG}_${JAVA_MAJOR_TAG}"
+
+    ## Spark + Dist tags
+    SPARK_DIST_TAG="${SPARK_TAG}_${DIST_TAG}"
+    SPARK_MAJMIN_DIST_TAG="${SPARK_MAJMIN_TAG}_${DIST_TAG}"
+
+    ## Spark + Java + Dist tags
+    SPARK_JAVA_MAJOR_DIST_TAG="${SPARK_TAG}_${JAVA_MAJOR_TAG}_${DIST_TAG}"
+    SPARK_MAJMIN_JAVA_MAJOR_DIST_TAG="${SPARK_MAJMIN_TAG}_${JAVA_MAJOR_TAG}_${DIST_TAG}"
+
+    # Docker build
+    docker build . -f Dockerfile-${DIST} \
+      --build-arg JAVA_MAJOR_VERSION="${JAVA_MAJOR_VERSION}" \
+      --build-arg SPARK_VERSION="${SPARK_VERSION}" \
+      --build-arg HADOOP_MAJMIN_VERSION="${HADOOP_MAJMIN_VERSION}" \
+      -t "${REF_IMAGE}"
+
+    # Docker verification
+    docker run --rm -t ${REF_IMAGE} \
+      spark-submit --version | grep "${SPARK_VERSION}" > /dev/null
+
+    # Docker re-tagging
+    # Spark version is always unique across Nomad version, so all builds can tag and push independently
     if [ "${DIST} = debian" ]; then
-      docker push "${IMAGE_NAME}:${SPARK_TAG}"
-      docker push "${IMAGE_NAME}:${SPARK_MAJMIN_TAG}"
-      docker push "${IMAGE_NAME}:${SPARK_JAVA_MAJOR_TAG}"
-      docker push "${IMAGE_NAME}:${SPARK_MAJMIN_JAVA_MAJOR_TAG}"
+      # Non-dist tag is given to Debian
+      docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_TAG}"
+      docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_TAG}"
+      docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_JAVA_MAJOR_TAG}"
+      docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_JAVA_MAJOR_TAG}"
     fi
 
-    docker push "${IMAGE_NAME}:${SPARK_JAVA_MAJOR_DIST_TAG}"
-    docker push "${IMAGE_NAME}:${SPARK_MAJMIN_JAVA_MAJOR_DIST_TAG}"
-  fi
+    # Common tags to all dists
+    docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_DIST_TAG}"
+    docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_DIST_TAG}"
+    docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_JAVA_MAJOR_DIST_TAG}"
+    docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_JAVA_MAJOR_DIST_TAG}"
+
+    # Docker push to registry
+    if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then
+      if [ "${DIST} = debian" ]; then
+        docker push "${IMAGE_NAME}:${SPARK_TAG}"
+        docker push "${IMAGE_NAME}:${SPARK_MAJMIN_TAG}"
+        docker push "${IMAGE_NAME}:${SPARK_JAVA_MAJOR_TAG}"
+        docker push "${IMAGE_NAME}:${SPARK_MAJMIN_JAVA_MAJOR_TAG}"
+      fi
+
+      docker push "${IMAGE_NAME}:${SPARK_DIST_TAG}"
+      docker push "${IMAGE_NAME}:${SPARK_MAJMIN_DIST_TAG}"
+      docker push "${IMAGE_NAME}:${SPARK_JAVA_MAJOR_DIST_TAG}"
+      docker push "${IMAGE_NAME}:${SPARK_MAJMIN_JAVA_MAJOR_DIST_TAG}"
+    fi
+  done
 
 branches:
   only:
