@@ -72,13 +72,13 @@ script:
     grep -oE '[2]\.[[:digit:]]+\.[[:digit:]]' |
     sort | uniq |
     awk "NR % ${N} == ${IDX}")
-- echo Spark version\(s\) to build ~ ${SPARK_VERSIONS_RAW}
+- echo Spark version\(s\) to build - ${SPARK_VERSIONS_RAW}
 - declare -a SPARK_VERSIONS=(${SPARK_VERSIONS_RAW})
 
 # Iterate across each Spark version
 - |-
   for SPARK_VERSION in "${SPARK_VERSIONS[@]}"; do
-    echo Building Spark version ~ ${SPARK_VERSION}
+    echo Building Spark version - ${SPARK_VERSION}
 
     ## Spark only tags
     SPARK_TAG="${SPARK_VERSION}"
