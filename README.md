@@ -1,7 +1,8 @@
 # Spark Docker Builder
 
-Dockerfile setup to install various versions of Spark in a minimalist
-environment, for both slimmed Debian and Alpine.
+Dockerfile + Travis cron set-up to install all `2.y.z` versions of Spark in a
+minimalist environment, for both slimmed Debian and Alpine. This set-up is set
+to run weekly.
 
 The Java version `JAVA_MAJOR_VERSION` defaults to 8, while `SPARK_VERSION` build
 argument must be specified.
