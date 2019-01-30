@@ -20,7 +20,7 @@ RUN set -xeu; \
     export SPARK_DIR_PARENT="$(dirname "${SPARK_HOME}")"; \
     mkdir -p ${SPARK_DIR_PARENT}; \
     # Spark installation
-    wget https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/${SPARK_NAME}.tgz; \
+    wget -q https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/${SPARK_NAME}.tgz; \
     tar zxf ${SPARK_NAME}.tgz -C ${SPARK_DIR_PARENT}; \
     rm ${SPARK_NAME}.tgz; \
     ln -s ${SPARK_DIR} ${SPARK_HOME}; \
