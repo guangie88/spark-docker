@@ -66,20 +66,16 @@ script:
 
 # Get latest set of Spark versions to build concurrently
 - |-
-  SPARK_VERSIONS_RAW=$(
+  declare -a SPARK_VERSIONS=($(
     curl -s https://archive.apache.org/dist/spark/ |
     grep -oE 'spark-[2]\.[[:digit:]]+\.[[:digit:]]/' |
     grep -oE '[2]\.[[:digit:]]+\.[[:digit:]]' |
     sort | uniq |
-    awk "NR % ${N} == ${IDX}")
-- echo Spark version\(s\) to build - ${SPARK_VERSIONS_RAW}
-- declare -a SPARK_VERSIONS=(${SPARK_VERSIONS_RAW})
+    awk "NR % ${N} == ${IDX}"))
 
 # Iterate across each Spark version
 - |-
   for SPARK_VERSION in "${SPARK_VERSIONS[@]}"; do
-    echo Building Spark version - ${SPARK_VERSION}
-
     ## Spark only tags
     SPARK_TAG="${SPARK_VERSION}"
     SPARK_MAJMIN_TAG="${SPARK_VERSION:0:3}"
