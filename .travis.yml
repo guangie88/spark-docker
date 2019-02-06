@@ -66,12 +66,11 @@ script:
 
 # Get all Spark versions first
 - |-
-  SPARK_ALL_VERSIONS_RAW=$(
+  SPARK_ALL_VERSIONS=($(
     curl -s https://archive.apache.org/dist/spark/ |
     grep -oE 'spark-[2]\.[[:digit:]]+\.[[:digit:]]/' |
     grep -oE '[2]\.[[:digit:]]+\.[[:digit:]]' |
-    sort | uniq)
-- SPARK_ALL_VERSIONS=(${SPARK_ALL_VERSIONS_RAW})
+    sort | uniq))
 
 # Get the array of major version
 - SPARK_MAJ_VERSIONS=()
@@ -103,7 +102,7 @@ script:
   done
 
 # Get the array of Spark versions to build concurrently based on indexing
-- SPARK_VERSIONS=($(echo "${SPARK_ALL_VERSIONS_RAW[@]}" | tr '\n' ' ' | awk "NR % ${N} == ${IDX}"))
+- SPARK_VERSIONS=($(echo "${SPARK_ALL_VERSIONS[@]}" | tr '\n' ' ' | awk "NR % ${N} == ${IDX}"))
 
 # Iterate across each Spark version
 - |-
