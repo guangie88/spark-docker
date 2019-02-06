@@ -64,19 +64,65 @@ script:
 - JAVA_MAJOR_TAG="java-${JAVA_MAJOR_VERSION}"
 - DIST_TAG="${DIST}"
 
-# Get latest set of Spark versions to build concurrently
+# Get all Spark versions first
 - |-
-  SPARK_VERSIONS=($(
+  SPARK_ALL_VERSIONS=($(
     curl -s https://archive.apache.org/dist/spark/ |
     grep -oE 'spark-[2]\.[[:digit:]]+\.[[:digit:]]/' |
     grep -oE '[2]\.[[:digit:]]+\.[[:digit:]]' |
-    sort | uniq |
-    awk "NR % ${N} == ${IDX}"))
+    sort | uniq))
+
+# Get the array of major version
+- SPARK_MAJ_VERSIONS=()
+- |-
+  for SPARK_VERSION in "${SPARK_ALL_VERSIONS[@]}"; do
+    SPARK_MAJ_VERSION=${SPARK_VERSION:0:3}
+    SPARK_MAJ_VERSIONS+=(${SPARK_MAJ_VERSION})
+  done
+- SPARK_MAJ_VERSIONS=($(echo "${SPARK_MAJ_VERSIONS[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
+
+# Get the array of Spark versions that contribute to the latest minor versions
+- SPARK_VERSIONS_WITH_LATEST_MINOR=()
+- |-
+  for SPARK_MAJ_VERSION in "${SPARK_MAJ_VERSIONS[@]}"; do
+    for SPARK_VERSION in "${SPARK_ALL_VERSIONS[@]}"; do
+      if [[ ${SPARK_VERSION} == ${SPARK_MAJ_VERSION}* ]]; then
+        # Because the version values are sorted in ascending order
+        # The last value to match the major version is the latest version to use
+        SPARK_SELECTED_VERSION=${SPARK_VERSION}
+      fi
+    done
+    SPARK_VERSIONS_WITH_LATEST_MINOR+=(${SPARK_SELECTED_VERSION})
+  done
+- SPARK_VERSIONS_WITH_LATEST_MINOR=($(echo "${SPARK_VERSIONS_WITH_LATEST_MINOR[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
+
+- |-
+  for SPARK_VERSION_WITH_LATEST_MINOR in "${SPARK_VERSIONS_WITH_LATEST_MINOR[@]}"; do
+    echo ${SPARK_VERSION_WITH_LATEST_MINOR}
+  done
+
+# Get the array of Spark versions to build concurrently based on indexing
+- SPARK_VERSIONS=($(echo "${SPARK_ALL_VERSIONS[@]}" | tr ' ' '\n' | awk "NR % ${N} == ${IDX}" | tr '\n' ' '))
+- |-
+  for SPARK_VERSION in "${SPARK_VERSIONS[@]}"; do
+    echo ${SPARK_VERSION}
+  done
 
 # Iterate across each Spark version
 - |-
   for SPARK_VERSION in "${SPARK_VERSIONS[@]}"; do
     echo Building Spark version - ${SPARK_VERSION}
+
+    ## Check if current Spark version contributes to the latest minor version
+    SPARK_VERSION_HAS_LATEST_MINOR=false
+
+    for SPARK_VERSION_WITH_LATEST_MINOR in "${SPARK_VERSIONS_WITH_LATEST_MINOR[@]}"; do
+      if [[ "${SPARK_VERSION}" == "${SPARK_VERSION_WITH_LATEST_MINOR}" ]]; then
+        SPARK_VERSION_HAS_LATEST_MINOR=true
+      fi
+    done
+
+    echo ${SPARK_VERSION} has latest minor version - ${SPARK_VERSION_HAS_LATEST_MINOR}
 
     ## Spark only tags
     SPARK_TAG="${SPARK_VERSION}"
@@ -107,33 +153,45 @@ script:
 
     # Docker re-tagging
     # Spark version is always unique across Nomad version, so all builds can tag and push independently
-    if [ "${DIST} = debian" ]; then
+    if [ "${DIST}" = "debian" ]; then
       # Non-dist tag is given to Debian
       docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_TAG}"
-      docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_TAG}"
       docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_JAVA_MAJOR_TAG}"
-      docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_JAVA_MAJOR_TAG}"
+
+      if [ "${SPARK_VERSION_HAS_LATEST_MINOR}" = "true" ]; then
+        docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_TAG}"
+        docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_JAVA_MAJOR_TAG}"
+      fi
     fi
 
     # Common tags to all dists
     docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_DIST_TAG}"
-    docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_DIST_TAG}"
     docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_JAVA_MAJOR_DIST_TAG}"
-    docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_JAVA_MAJOR_DIST_TAG}"
+
+    if [ "${SPARK_VERSION_HAS_LATEST_MINOR}" = "true" ]; then
+      docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_DIST_TAG}"
+      docker tag "${REF_IMAGE}" "${IMAGE_NAME}:${SPARK_MAJMIN_JAVA_MAJOR_DIST_TAG}"
+    fi
 
     # Docker push to registry
     if [ "${TRAVIS_PULL_REQUEST}" = "false" ]; then
       if [ "${DIST} = debian" ]; then
         docker push "${IMAGE_NAME}:${SPARK_TAG}"
-        docker push "${IMAGE_NAME}:${SPARK_MAJMIN_TAG}"
         docker push "${IMAGE_NAME}:${SPARK_JAVA_MAJOR_TAG}"
-        docker push "${IMAGE_NAME}:${SPARK_MAJMIN_JAVA_MAJOR_TAG}"
+
+        if [ "${SPARK_VERSION_HAS_LATEST_MINOR}" = "true" ]; then
+          docker push "${IMAGE_NAME}:${SPARK_MAJMIN_TAG}"
+          docker push "${IMAGE_NAME}:${SPARK_MAJMIN_JAVA_MAJOR_TAG}"
+        fi
       fi
 
       docker push "${IMAGE_NAME}:${SPARK_DIST_TAG}"
-      docker push "${IMAGE_NAME}:${SPARK_MAJMIN_DIST_TAG}"
       docker push "${IMAGE_NAME}:${SPARK_JAVA_MAJOR_DIST_TAG}"
-      docker push "${IMAGE_NAME}:${SPARK_MAJMIN_JAVA_MAJOR_DIST_TAG}"
+
+      if [ "${SPARK_VERSION_HAS_LATEST_MINOR}" = "true" ]; then
+        docker push "${IMAGE_NAME}:${SPARK_MAJMIN_DIST_TAG}"
+        docker push "${IMAGE_NAME}:${SPARK_MAJMIN_JAVA_MAJOR_DIST_TAG}"
+      fi
     fi
   done
 
