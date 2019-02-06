@@ -102,7 +102,11 @@ script:
   done
 
 # Get the array of Spark versions to build concurrently based on indexing
-- SPARK_VERSIONS=($(echo "${SPARK_ALL_VERSIONS[@]}" | tr '\n' ' ' | awk "NR % ${N} == ${IDX}"))
+- SPARK_VERSIONS=($(echo "${SPARK_ALL_VERSIONS[@]}" | tr ' ' '\n' | awk "NR % ${N} == ${IDX}" | tr '\n' ' '))
+- |-
+  for SPARK_VERSION in "${SPARK_VERSIONS[@]}"; do
+    echo ${SPARK_VERSION}
+  done
 
 # Iterate across each Spark version
 - |-
